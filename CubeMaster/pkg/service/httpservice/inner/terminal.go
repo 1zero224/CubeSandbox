@@ -49,6 +49,12 @@ const (
 	terminalMetadataRequestID = "x-cube-request-id"
 	terminalMetadataSessionID = "x-cube-terminal-session-id"
 	terminalEventOpened       = "terminal_opened"
+	// terminalTargetResolveTimeout bounds the sandbox resolution fallback. In
+	// the normal flow the target is already cached (CubeOps resolved it moments
+	// earlier to issue the grant); only a stale cache reaches ResolveSandboxID,
+	// whose cluster-scan fallback must never block the WebSocket handshake for
+	// the full request lifetime.
+	terminalTargetResolveTimeout = 10 * time.Second
 )
 
 var (
@@ -307,7 +313,9 @@ func resolveTerminalTarget(ctx context.Context, requestedSandboxID string) (stri
 	if hostIP, ok := terminalTargetHost(ctx, requestedSandboxID); ok {
 		return terminalEndpointForHost(requestedSandboxID, hostIP)
 	}
-	canonicalSandboxID, err := sandboxservice.ResolveSandboxID(ctx, requestedSandboxID)
+	resolveCtx, resolveCancel := context.WithTimeout(ctx, terminalTargetResolveTimeout)
+	canonicalSandboxID, err := sandboxservice.ResolveSandboxID(resolveCtx, requestedSandboxID)
+	resolveCancel()
 	if err != nil {
 		return "", "", fmt.Errorf("%w: %v", errTerminalTargetNotFound, err)
 	}
