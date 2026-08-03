@@ -1236,8 +1236,13 @@ func (l *local) runContainer(
 
 	endpoint := cubebox.Endpoint
 	if endpoint.IsValid() {
+		taskAPIEndpoint, endpointErr := endpoint.TaskAPIEndpoint()
+		if endpointErr != nil {
+			return ret.Err(errorcode.ErrorCode_CreateContainerFailed,
+				fmt.Sprintf("sandbox endpoint cannot be reused for container %s: %v", ci.ID, endpointErr))
+		}
 		taskOpts = append(taskOpts,
-			containerd.WithTaskAPIEndpoint(endpoint.Address, endpoint.Version))
+			containerd.WithTaskAPIEndpoint(taskAPIEndpoint, endpoint.Version))
 	}
 
 	taskStart := time.Now()
@@ -1254,9 +1259,15 @@ func (l *local) runContainer(
 			return ret.Err(errorcode.ErrorCode_ContainerNotFound, fmt.Sprintf("get shim %s failed, err: %v", ci.ID, err))
 		}
 		ep, v := shim.Endpoint()
+		taskEndpoint := sandboxstore.Endpoint{Address: ep, Version: uint32(v), Pid: task.Pid()}
+		normalizedEndpoint, endpointErr := taskEndpoint.TaskAPIEndpoint()
+		if endpointErr != nil {
+			return ret.Err(errorcode.ErrorCode_CreateContainerFailed,
+				fmt.Sprintf("new sandbox shim did not advertise a reusable task endpoint: %v", endpointErr))
+		}
 
 		cubebox.Endpoint = sandboxstore.Endpoint{
-			Address: ep,
+			Address: normalizedEndpoint,
 			Version: uint32(v),
 			Pid:     task.Pid(),
 		}

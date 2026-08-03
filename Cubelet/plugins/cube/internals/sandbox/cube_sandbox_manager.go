@@ -40,6 +40,7 @@ import (
 	v2 "github.com/containerd/containerd/v2/core/runtime/v2"
 	"github.com/containerd/containerd/v2/core/sandbox"
 	"github.com/containerd/containerd/v2/plugins"
+	sandboxstore "github.com/tencentcloud/CubeSandbox/Cubelet/internal/cube/store/sandbox"
 )
 
 func init() {
@@ -183,13 +184,18 @@ func (c *controllerLocal) Status(ctx context.Context, sandboxID string, verbose 
 		return sandbox.ControllerStatus{}, fmt.Errorf("unable to find sandbox %q", sandboxID)
 	}
 	address, version := shim.Endpoint()
+	endpoint := sandboxstore.Endpoint{Address: address, Version: uint32(version)}
+	taskAPIEndpoint, endpointErr := endpoint.TaskAPIEndpoint()
+	if endpointErr != nil {
+		return sandbox.ControllerStatus{}, fmt.Errorf("sandbox %s does not advertise a reusable task endpoint: %w", sandboxID, endpointErr)
+	}
 
 	return sandbox.ControllerStatus{
 		SandboxID: sandboxID,
 		Pid:       resp.GetPid(),
 		State:     resp.GetStatus().String(),
 		ExitedAt:  resp.GetExitedAt().AsTime(),
-		Address:   address,
+		Address:   taskAPIEndpoint,
 		Version:   uint32(version),
 	}, nil
 }

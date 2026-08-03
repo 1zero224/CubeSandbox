@@ -21,6 +21,8 @@
 package sandbox
 
 import (
+	"fmt"
+	"strings"
 	"sync"
 
 	containerd "github.com/containerd/containerd/v2/client"
@@ -58,7 +60,40 @@ type Endpoint struct {
 }
 
 func (e *Endpoint) IsValid() bool {
-	return e.Address != ""
+	return e != nil && strings.TrimSpace(e.Address) != ""
+}
+
+// TaskAPIEndpoint returns the address form expected by containerd 2.x when a
+// task is created through an existing sandbox shim.  Shim v3 bootstrap
+// responses contain the protocol and socket separately, while
+// WithTaskAPIEndpoint receives a single "protocol+address" value.
+//
+// This deliberately rejects legacy v2 endpoints instead of silently starting
+// a second shim.  Starting a second shim would create another VM/TAP and is
+// exactly the failure mode this demo-only runtime branch is intended to
+// prevent.
+func (e Endpoint) TaskAPIEndpoint() (string, error) {
+	address := strings.TrimSpace(e.Address)
+	if address == "" {
+		return "", fmt.Errorf("sandbox task endpoint is empty")
+	}
+	if e.Version < 3 {
+		return "", fmt.Errorf("sandbox task endpoint version %d does not support reuse", e.Version)
+	}
+	if strings.Contains(address, "+") {
+		protocol, rest, ok := strings.Cut(address, "+")
+		if !ok || (protocol != "ttrpc" && protocol != "grpc") || rest == "" {
+			return "", fmt.Errorf("sandbox task endpoint has invalid protocol form %q", address)
+		}
+		return address, nil
+	}
+	if strings.HasPrefix(address, "unix://") || strings.HasPrefix(address, "/") {
+		return "ttrpc+" + address, nil
+	}
+	if strings.HasPrefix(address, "vsock://") {
+		return "grpc+" + address, nil
+	}
+	return "", fmt.Errorf("sandbox task endpoint %q has no supported transport", address)
 }
 
 func NewSandbox(metadata Metadata, status Status) Sandbox {
