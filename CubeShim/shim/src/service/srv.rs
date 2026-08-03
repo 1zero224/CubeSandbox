@@ -50,7 +50,18 @@ impl Shim for Service {
             err: e,
         })?;
         */
-        Ok(address)
+        // containerd 2.x uses bootstrap version 3 to decide whether a task
+        // belongs to an existing sandbox shim.  Returning only the legacy
+        // socket address makes containerd treat every subsequent container as
+        // an independent v2 shim, which starts a second VM/TAP.  Keep the
+        // socket itself unchanged, but advertise the real ttrpc protocol and
+        // the sandbox-capable task API explicitly.
+        serde_json::to_string(&serde_json::json!({
+            "version": 3,
+            "protocol": "ttrpc",
+            "address": address,
+        }))
+        .map_err(|e| Error::Other(format!("encode shim bootstrap response failed: {e}")))
     }
 
     async fn delete_shim(&mut self) -> Result<api::DeleteResponse, Error> {

@@ -5,6 +5,7 @@
 pub mod common;
 pub mod container;
 pub mod cube;
+pub mod demo_runtime;
 pub mod hypervisor;
 pub mod log;
 pub mod sandbox;

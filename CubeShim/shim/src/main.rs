@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use containerd_shim::asynchronous::run as shim_run;
 use containerd_shim::{parse, Config};
 use containerd_shim_cube_rs::common;
+use containerd_shim_cube_rs::demo_runtime::run as shim_run;
 use containerd_shim_cube_rs::service::Service;
 
 use std::ffi::OsString;
